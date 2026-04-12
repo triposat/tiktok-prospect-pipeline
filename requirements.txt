@@ -1,0 +1,9 @@
+# TikTok Prospect Pipeline dependencies
+# Pinned to versions verified working as of April 2026.
+#
+# Minimal footprint: three packages total. No pandas, no heavy frameworks.
+# Built-in `csv`, `json`, `argparse`, `pathlib` handle everything else.
+
+apify-client>=2.5.0,<3.0.0
+cohere>=6.1.0,<7.0.0
+python-dotenv>=1.0.0,<2.0.0

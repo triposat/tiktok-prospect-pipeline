@@ -1,0 +1,30 @@
+# Secrets — NEVER commit real API keys
+.env
+.env.local
+.env.*.local
+
+# Pipeline outputs
+prospects.csv
+prospects.json
+raw_comments.json
+raw_profiles.json
+runs/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+env/
+ENV/
+.Python
+build/
+dist/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
