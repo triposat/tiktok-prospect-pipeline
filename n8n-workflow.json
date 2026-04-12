@@ -1,0 +1,480 @@
+{
+  "name": "TikTok Prospect Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 1 — Start here\n\n**Manual Trigger** → run on demand\n**Schedule Trigger** → every Monday 9 AM\n\nEdit the **Config** node to set your video URL.\nLeave topic and target at \"auto\" — adapts to any niche.",
+        "height": 220,
+        "width": 360,
+        "color": 6
+      },
+      "id": "8233eabb-87dd-4b38-af1a-5d3fb83add78",
+      "name": "Sticky Note — Start",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -60,
+        -280
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 2 — Scrape + dedupe\n\n**Scrape Comments** → every comment on the video\n**Sort by Likes** → highest engagement first\n**Dedupe by Username** → one row per person, best comment kept",
+        "height": 200,
+        "width": 580,
+        "color": 5
+      },
+      "id": "d8a1eec8-d876-4957-9034-2e031c05b941",
+      "name": "Sticky Note — Scrape and Dedupe",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        400,
+        -280
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 3 — LLM ranking\n\n**Build Cohere Request** → formats comments into a ranking prompt\n**Rank with Cohere** → returns a top-15 prospect shortlist",
+        "height": 200,
+        "width": 380,
+        "color": 4
+      },
+      "id": "f8543340-fb7a-4a51-8f3a-f69507140d1c",
+      "name": "Sticky Note — Rank with Cohere",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1060,
+        -280
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 4 — Enrich + export\n\n**Enrich Profiles** → bio, followers, seller flag, bio link\n**Join Prospects** → merges rankings + comments + profiles by username\n**Export CSV** → download your prospect list",
+        "height": 200,
+        "width": 720,
+        "color": 3
+      },
+      "id": "d75ce469-f4e7-4663-bc88-6b89f1c0c24a",
+      "name": "Sticky Note — Enrich and Export",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1540,
+        -280
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "ca3e16c9-7a6a-485f-8e33-673e4f43f29e",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [
+                1
+              ],
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "id": "ebe96ac4-1e05-4b54-bb59-e6587672db95",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "105fafdb-ffc1-4c45-ae77-2c1453324f59",
+              "name": "video_url",
+              "value": "https://www.tiktok.com/@garyvee/video/7626061508174236941",
+              "type": "string"
+            },
+            {
+              "id": "abc23176-6a53-422e-9314-6deb87d8193b",
+              "name": "comments_limit",
+              "value": 1000,
+              "type": "number"
+            },
+            {
+              "id": "63eb40db-d449-4633-9650-6302bedcd56c",
+              "name": "shortlist_size",
+              "value": 15,
+              "type": "number"
+            },
+            {
+              "id": "470e3c3f-2f1e-4619-85d6-7c58631db3de",
+              "name": "llm_model",
+              "value": "command-a-03-2025",
+              "type": "string"
+            },
+            {
+              "id": "228c0042-076e-4dfb-9cb7-c3428b846799",
+              "name": "topic",
+              "value": "auto",
+              "type": "string"
+            },
+            {
+              "id": "4624367b-439f-49d2-bdbe-07d3889ebc0a",
+              "name": "target",
+              "value": "auto",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2af66655-632e-4aa5-97ed-8d567b309404",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "Run actor and get dataset",
+        "actorSource": "store",
+        "actorId": {
+          "__rl": true,
+          "value": "BDec00yAmCm1QbMEI",
+          "mode": "list",
+          "cachedResultName": "TikTok Comments Scraper (clockworks/tiktok-comments-scraper)",
+          "cachedResultUrl": "https://console.apify.com/actors/BDec00yAmCm1QbMEI/input"
+        },
+        "customBody": "={\n  \"postURLs\": [\"{{ $('Config').item.json.video_url }}\"],\n  \"commentsPerPost\": {{ $('Config').item.json.comments_limit }},\n  \"maxRepliesPerComment\": 0\n}",
+        "memory": 4096
+      },
+      "id": "f18ae7cd-a380-4143-a030-ed42d81eeb52",
+      "name": "Scrape Comments",
+      "type": "@apify/n8n-nodes-apify.apify",
+      "typeVersion": 1,
+      "position": [
+        440,
+        0
+      ],
+      "credentials": {
+        "apifyApi": {
+          "id": "",
+          "name": "Apify account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "type": "simple",
+        "sortFieldsUi": {
+          "sortField": [
+            {
+              "fieldName": "diggCount",
+              "order": "descending"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e1625416-0c76-4800-b71b-847dce6f86e3",
+      "name": "Sort by Likes",
+      "type": "n8n-nodes-base.sort",
+      "typeVersion": 1,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "removeDuplicateInputItems",
+        "compare": "selectedFields",
+        "fieldsToCompare": "uniqueId",
+        "options": {}
+      },
+      "id": "5ff9f84b-98cd-4cbf-8436-050c7c4363d5",
+      "name": "Dedupe by Username",
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// ============================================================================\n//  Build the Cohere /v2/chat request body from the sorted + deduped comments\n// ============================================================================\n//\n//  Upstream: Sort by diggCount desc → Remove Duplicates by uniqueId (keeps\n//  first occurrence, which — after the sort — is the highest-diggCount\n//  comment per unique commenter).\n//\n//  Input  : one item per unique commenter\n//  Output : single item with three fields:\n//             - comments         : compact array of { username, text, likes,\n//                                    replies, video_url } per prospect\n//             - count            : number of unique commenters\n//             - cohere_body_json : full Cohere /v2/chat request body as a\n//                                  JSON string, ready for the HTTP Request\n// ============================================================================\n\n// Reshape each item to the compact form the LLM expects\nconst comments = [];\nfor (const item of $input.all()) {\n  const c = item.json;\n  const username = (c.uniqueId || '').toString().trim();\n  if (!username) continue;\n  comments.push({\n    username,\n    text: (c.text || '').toString(),\n    likes: Number(c.diggCount || 0),\n    replies: Number(c.replyCommentTotal || 0),\n    video_url: (c.videoWebUrl || '').toString(),\n  });\n}\n\n// Pull the topic/target/model/shortlist size from the Config node\nconst config = $('Config').first().json;\nconst shortlistSize = Number(config.shortlist_size || 15);\nconst llmModel = config.llm_model || 'command-a-03-2025';\n\n// ---- Auto-detect topic and target if set to \"auto\" -----------------------\n// When the reader pastes a new video URL without customizing topic/target,\n// the code auto-infers context from the first 15 comments. This means the\n// workflow works for ANY niche out of the box — real estate, fitness, SaaS,\n// dropshipping, whatever — without manual prompt editing.\nlet topic = (config.topic || '').toString().trim();\nif (!topic || topic.toLowerCase() === 'auto') {\n  const sampleTexts = comments.slice(0, 15).map(c => c.text).join(' | ');\n  topic = 'a TikTok video. Here is a sample of the comments to help you understand the topic and audience: ' + sampleTexts.substring(0, 500);\n}\n\nlet target = (config.target || '').toString().trim();\nif (!target || target.toLowerCase() === 'auto') {\n  target = 'anyone who appears to be running, starting, or actively trying to grow a business — regardless of industry or niche. Look for signals of real business activity (stores, services, products, clients) rather than passive interest.';\n}\n\nconst systemPrompt = 'You are a B2B prospect-qualification analyst helping a sales team find high-intent leads inside a TikTok comment section.\\n\\nContext:\\n- Source video topic: {{TOPIC}}\\n- Target buyer: {{TARGET}}\\n\\nYour task:\\nFrom the JSON array of TikTok comments (each has: username, text, likes, replies), identify up to {{SHORTLIST_SIZE}} commenters who look like real prospects for cold outreach. Rank them by buying intent — how close each commenter is to needing and buying a product or service today.\\n\\nSTRICT RANKING RUBRIC — use these exact definitions:\\n\\n- high — The commenter is clearly running a real business RIGHT NOW. Signals: they mention their own store/shop/service/product (e.g., \"I have a TikTok shop\", \"my Shopify store\", \"my embroidery business\", \"I\\'m a realtor\"), OR their username explicitly references a business or profession (e.g., \"@something_realtor\", \"@shopname\", \"@agencyname\", \"*_biz\"), OR they describe an active, specific business pain point they are trying to solve. These are the prospects you would email first.\\n\\n- medium — The commenter has relevant signals but weaker ones. They describe trying or planning to start a business, OR ask a substantive how-to question about running/scaling a business, OR their username is business-adjacent but ambiguous.\\n\\n- low — The commenter has only mild signals: general business curiosity, personal development talk, or weak engagement with the topic.\\n\\nSkip entirely: generic reactions, fan messages, emoji-only comments, skeptics, scam accounts (Telegram/WhatsApp/crypto in the comment), people who say they can\\'t use the product in their country, people venting about debt with no business context.\\n\\nTie-breaker between two similar comments: prefer the one with higher likes and more replies.\\n\\nReturn EXACTLY one JSON object with a `prospects` field containing up to {{SHORTLIST_SIZE}} ranked objects. Each object has:\\n- username: the TikTok handle, WITHOUT the @ prefix. Must appear verbatim in the input array.\\n- comment_excerpt: a short verbatim quote (≤140 chars) from their actual comment\\n- why_prospect: one sentence explaining the specific signal that made them a prospect\\n- priority: \"high\", \"medium\", or \"low\"\\n\\nOrder the array by priority (highs first). Favor quality over quantity.'\n  .replaceAll('{{TOPIC}}', topic)\n  .replaceAll('{{TARGET}}', target)\n  .replaceAll('{{SHORTLIST_SIZE}}', String(shortlistSize));\n\nconst prospectSchema = {\n  type: 'object',\n  properties: {\n    prospects: {\n      type: 'array',\n      items: {\n        type: 'object',\n        properties: {\n          username:        { type: 'string' },\n          comment_excerpt: { type: 'string' },\n          why_prospect:    { type: 'string' },\n          priority:        { type: 'string', enum: ['high', 'medium', 'low'] },\n        },\n        required: ['username', 'comment_excerpt', 'why_prospect', 'priority'],\n      },\n    },\n  },\n  required: ['prospects'],\n};\n\nconst cohereBody = {\n  model: llmModel,\n  messages: [\n    { role: 'system', content: systemPrompt },\n    {\n      role: 'user',\n      content:\n        'Here is the full JSON array of TikTok comments. Return the ranked shortlist now.\\n\\n' +\n        JSON.stringify(comments),\n    },\n  ],\n  response_format: { type: 'json_object', json_schema: prospectSchema },\n  temperature: 0.1,\n  max_tokens: 4000,\n};\n\nreturn [\n  {\n    json: {\n      comments,\n      count: comments.length,\n      cohere_body_json: JSON.stringify(cohereBody),\n    },\n  },\n];\n"
+      },
+      "id": "d834b255-6cf5-4aab-a938-b6cbd1154715",
+      "name": "Build Cohere Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.cohere.com/v2/chat",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "cohereApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "content-type",
+              "value": "application/json"
+            },
+            {
+              "name": "accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.cohere_body_json }}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "4d956ac3-8817-43c5-a5da-1bedfd666751",
+      "name": "Rank with Cohere",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        0
+      ],
+      "credentials": {
+        "cohereApi": {
+          "id": "",
+          "name": "Cohere account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// ============================================================================\n//  Parse the Cohere response and extract the ranked prospect shortlist\n// ============================================================================\n//\n//  Input  : single item — the raw Cohere /v2/chat response\n//  Output : single item with two fields:\n//             - prospects : full ranked objects from Cohere (with priority,\n//                           why_prospect, comment_excerpt, username)\n//             - usernames : flat array of usernames ready to feed into the\n//                           Profile Scraper (stripped of any '@' prefix)\n// ============================================================================\n\nconst response = $input.first().json;\n\n// The Cohere response has message.content as a list of blocks. Grab text\n// blocks only (a future model could emit thinking blocks too).\nconst contentBlocks = (response && response.message && response.message.content) || [];\nlet rawText = '';\nfor (const block of contentBlocks) {\n  if (block && block.type === 'text' && typeof block.text === 'string') {\n    rawText += block.text;\n  }\n}\n\nif (!rawText) {\n  throw new Error('Cohere response contained no text content blocks');\n}\n\nlet parsed;\ntry {\n  parsed = JSON.parse(rawText);\n} catch (e) {\n  throw new Error('Failed to parse Cohere response as JSON: ' + e.message);\n}\n\nconst prospects = (parsed && parsed.prospects) || [];\nconst usernames = prospects\n  .map((p) => (p.username || '').toString().replace(/^@+/, '').trim())\n  .filter(Boolean);\n\nif (usernames.length === 0) {\n  throw new Error('Cohere returned zero prospects — nothing to enrich');\n}\n\nreturn [\n  {\n    json: {\n      prospects,\n      usernames,\n      shortlist_count: usernames.length,\n    },\n  },\n];\n"
+      },
+      "id": "f03058d0-d5f3-46ab-9256-f685ed80ee76",
+      "name": "Extract Shortlist",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "Run actor and get dataset",
+        "actorSource": "store",
+        "actorId": {
+          "__rl": true,
+          "value": "0FXVyOXXEmdGcV88a",
+          "mode": "list",
+          "cachedResultName": "TikTok Profile Scraper (clockworks/tiktok-profile-scraper)",
+          "cachedResultUrl": "https://console.apify.com/actors/0FXVyOXXEmdGcV88a/input"
+        },
+        "customBody": "={\n  \"profiles\": {{ JSON.stringify($json.usernames) }},\n  \"resultsPerPage\": 1,\n  \"profileScrapeSections\": [\"videos\"],\n  \"profileSorting\": \"latest\",\n  \"excludePinnedPosts\": false,\n  \"shouldDownloadAvatars\": false,\n  \"shouldDownloadCovers\": false,\n  \"shouldDownloadVideos\": false\n}",
+        "memory": 4096
+      },
+      "id": "fd1c8cb6-684b-4430-84d8-ebce5c2231c9",
+      "name": "Enrich Profiles",
+      "type": "@apify/n8n-nodes-apify.apify",
+      "typeVersion": 1,
+      "position": [
+        1760,
+        0
+      ],
+      "credentials": {
+        "apifyApi": {
+          "id": "",
+          "name": "Apify account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// ============================================================================\n//  Join the LLM rankings + original comments + enriched profiles into one\n//  unified row per prospect\n// ============================================================================\n//\n//  Data sources (via cross-node references):\n//    1. Current input          : Profile Scraper output (one row per video,\n//                                 with nested authorMeta per profile)\n//    2. Extract Shortlist node : Cohere's ranked prospects (priority, reason)\n//    3. Build Cohere Request   : the deduped comments array with original text\n//\n//  Output : one item per prospect, ordered by priority (high → medium → low)\n// ============================================================================\n\n// Build a username -> authorMeta lookup from the Profile Scraper items\nconst profilesByUsername = {};\nfor (const item of $input.all()) {\n  const author = (item.json && item.json.authorMeta) || {};\n  const name = (author.name || '').toString().trim().toLowerCase();\n  if (!name) continue;\n  if (!profilesByUsername[name]) {\n    profilesByUsername[name] = author;\n  }\n}\n\n// Pull the rankings from the Extract Shortlist node\nconst extractOutput = $('Extract Shortlist').first().json;\nconst rankings = (extractOutput && extractOutput.prospects) || [];\n\n// Pull the deduped comments from the Build Cohere Request node\nconst buildOutput = $('Build Cohere Request').first().json;\nconst dedupedComments = (buildOutput && buildOutput.comments) || [];\nconst commentsByUsername = {};\nfor (const c of dedupedComments) {\n  if (c && c.username) {\n    commentsByUsername[c.username.toLowerCase()] = c;\n  }\n}\n\n// Sort rankings: high → medium → low\nconst priorityOrder = { high: 0, medium: 1, low: 2 };\nconst sorted = [...rankings].sort(\n  (a, b) => (priorityOrder[a.priority] ?? 99) - (priorityOrder[b.priority] ?? 99)\n);\n\nconst output = [];\nfor (const r of sorted) {\n  const username = (r.username || '').toString().replace(/^@+/, '').trim();\n  if (!username) continue;\n  const key = username.toLowerCase();\n\n  const profile = profilesByUsername[key] || {};\n  const comment = commentsByUsername[key] || {};\n\n  // bioLink is sometimes a string, sometimes a dict { link: \"...\" }\n  let bioLink = profile.bioLink;\n  if (bioLink && typeof bioLink === 'object') {\n    bioLink = bioLink.link || '';\n  }\n\n  output.push({\n    json: {\n      priority:       r.priority || 'low',\n      username:       username,\n      followers:      Number(profile.fans || 0),\n      is_seller:      Boolean(profile.ttSeller),\n      is_verified:    Boolean(profile.verified),\n      is_private:     Boolean(profile.privateAccount),\n      bio:            (profile.signature || '').toString(),\n      bio_link:       (bioLink || '').toString(),\n      profile_url:    (profile.profileUrl || `https://www.tiktok.com/@${username}`).toString(),\n      comment_text:   (comment.text || r.comment_excerpt || '').toString(),\n      comment_likes:  Number(comment.likes || 0),\n      comment_replies: Number(comment.replies || 0),\n      why_prospect:   (r.why_prospect || '').toString(),\n      video_url:      (comment.video_url || '').toString(),\n    },\n  });\n}\n\nreturn output;\n"
+      },
+      "id": "cf51eccd-0a8e-4e08-a18a-bfb83b16878d",
+      "name": "Join Prospects",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "csv",
+        "options": {
+          "fileName": "prospects.csv"
+        }
+      },
+      "id": "c9c24be7-8525-4b1e-8fc9-5d9d572af65b",
+      "name": "Export CSV",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        2200,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Scrape Comments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape Comments": {
+      "main": [
+        [
+          {
+            "node": "Sort by Likes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sort by Likes": {
+      "main": [
+        [
+          {
+            "node": "Dedupe by Username",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedupe by Username": {
+      "main": [
+        [
+          {
+            "node": "Build Cohere Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Cohere Request": {
+      "main": [
+        [
+          {
+            "node": "Rank with Cohere",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rank with Cohere": {
+      "main": [
+        [
+          {
+            "node": "Extract Shortlist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Shortlist": {
+      "main": [
+        [
+          {
+            "node": "Enrich Profiles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enrich Profiles": {
+      "main": [
+        [
+          {
+            "node": "Join Prospects",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Join Prospects": {
+      "main": [
+        [
+          {
+            "node": "Export CSV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}
