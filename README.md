@@ -77,7 +77,7 @@ The `.env` file is gitignored. Never commit real secrets.
 
 ## Usage
 
-The simplest run:
+Run it with a TikTok video URL:
 
 ```bash
 python pipeline.py --video-url "https://www.tiktok.com/@garyvee/video/7626061508174236941"
