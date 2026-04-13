@@ -1,4 +1,4 @@
-# Secrets — NEVER commit real API keys
+# Secrets - NEVER commit real API keys
 .env
 .env.local
 .env.*.local

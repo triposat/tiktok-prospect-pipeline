@@ -1,44 +1,11 @@
 #!/usr/bin/env python3
 """
-TikTok Prospect Pipeline
-========================
+TikTok Prospect Pipeline - scrape comments, rank with Cohere, enrich profiles.
 
-End-to-end automation of the TikTok lead-generation workflow described in the
-Apify blog post "TikTok for Lead Generation." Given a TikTok video URL, this
-script:
-
-    1. Scrapes every comment on the video (Apify TikTok Comments Scraper).
-    2. Deduplicates commenters, keeping each user's best comment.
-    3. Sends the deduped comments to Cohere Command A with a strict JSON
-       schema and gets back a ranked top-N prospect shortlist.
-    4. Enriches each shortlisted username with full profile data
-       (Apify TikTok Profile Scraper).
-    5. Joins the comment data to the profile data by username.
-    6. Writes a single prospects.csv with one row per enriched prospect.
-    7. Prints a human-readable summary with top prospects and total cost.
-
-Usage
------
-    python pipeline.py --video-url "https://www.tiktok.com/@garyvee/video/7626061508174236941"
-
-Optional flags:
-    --topic          Free-text description of the source video's topic
-    --target         Description of who you want to find (your ideal buyer)
-    --shortlist-size Number of prospects to return (default: 15)
-    --comments-limit Max comments to scrape (default: 1000)
-    --output-dir     Where to write output files (default: ./output)
-
-Environment variables (read from .env or the shell):
-    APIFY_TOKEN      Apify API token
-    CO_API_KEY       Cohere API key
-
-Cost
-----
-    Comments Scraper: ~$1.25 per 1,000 comments
-    Profile Scraper:  ~$4.00 per 1,000 profiles
-    Cohere Command A: ~$0.07 per run (500 comments in, 15-item JSON out)
-
-    A single end-to-end run on a 500-comment video typically costs ~$0.77.
+Usage:  python pipeline.py --video-url "https://www.tiktok.com/@user/video/123"
+Env:    APIFY_TOKEN, CO_API_KEY (from .env or shell)
+Cost:   ~$0.77 per run on a 500-comment video
+Docs:   See README.md for full setup, options, and troubleshooting.
 """
 
 from __future__ import annotations
@@ -73,39 +40,26 @@ from cohere.types import (
 from dotenv import load_dotenv
 
 
-# ----------------------------------------------------------------------------
-# Configuration
-# ----------------------------------------------------------------------------
+# --- Configuration ---
 
 COMMENTS_ACTOR = "clockworks/tiktok-comments-scraper"
 PROFILE_ACTOR = "clockworks/tiktok-profile-scraper"
 
-# Cohere model — Command A (March 2025 release) is the flagship as of April
-# 2026, with a 256K context window and $2.50/$10 per 1M input/output tokens.
-# Command A handles structured JSON output via response_format with a schema.
+# Command A (March 2025) - $2.50/$10 per 1M tokens, 256K context, JSON schema support.
 COHERE_MODEL = "command-a-03-2025"
 
-# Price reference (USD) used only for the cost report at the end of a run.
-# These do not affect billing, which is done server-side by Apify and Cohere.
+# For the cost report only. Actual billing is server-side.
 COHERE_INPUT_PRICE_PER_MTOK = 2.50
 COHERE_OUTPUT_PRICE_PER_MTOK = 10.00
 
-# Defaults tuned for a typical business-vertical TikTok video.
+# "auto" = infer topic/target from the comments themselves.
 DEFAULT_COMMENTS_LIMIT = 1000
 DEFAULT_SHORTLIST_SIZE = 15
-DEFAULT_TOPIC = (
-    "a TikTok video about TikTok Live Shopping for small businesses "
-    "and solo entrepreneurs"
-)
-DEFAULT_TARGET = (
-    "anyone running (or trying to run) a small business who would pay "
-    "for marketing tools, CRMs, or business services"
-)
+DEFAULT_TOPIC = "auto"
+DEFAULT_TARGET = "auto"
 
 
-# ----------------------------------------------------------------------------
-# Logging
-# ----------------------------------------------------------------------------
+# --- Logging ---
 
 logging.basicConfig(
     level=logging.INFO,
@@ -115,14 +69,12 @@ logging.basicConfig(
 log = logging.getLogger("pipeline")
 
 
-# ----------------------------------------------------------------------------
-# Data classes
-# ----------------------------------------------------------------------------
+# --- Data classes ---
 
 
 @dataclass
 class Comment:
-    """One scraped TikTok comment, normalized to the fields we care about."""
+    """Normalized from the raw Apify response. See scrape_comments() for mapping."""
 
     username: str
     text: str
@@ -134,7 +86,7 @@ class Comment:
 
 @dataclass
 class LLMRanking:
-    """One prospect as ranked by Cohere."""
+    """Cohere's ranking output for one prospect."""
 
     username: str
     comment_excerpt: str
@@ -144,7 +96,7 @@ class LLMRanking:
 
 @dataclass
 class Prospect:
-    """One fully enriched prospect — the final row in prospects.csv."""
+    """Final row in prospects.csv - ranking + comment + profile joined."""
 
     username: str
     priority: str
@@ -181,9 +133,7 @@ class CostReport:
         )
 
 
-# ----------------------------------------------------------------------------
-# Progress spinner (thread-friendly, stderr only)
-# ----------------------------------------------------------------------------
+# --- Progress spinner (thread-friendly, stderr only) ---
 
 
 class Spinner:
@@ -207,7 +157,6 @@ class Spinner:
         self._stop.set()
         if self._thread is not None:
             self._thread.join(timeout=2.0)
-        # Clear the line and move to next line
         sys.stderr.write("\r" + " " * 80 + "\r")
         sys.stderr.flush()
 
@@ -222,13 +171,11 @@ class Spinner:
             i += 1
 
 
-# ----------------------------------------------------------------------------
-# Apify helpers
-# ----------------------------------------------------------------------------
+# --- Apify helpers ---
 
 
 def make_apify_client(token: str) -> ApifyClient:
-    """Build an ApifyClient with generous retries for CLI robustness."""
+    """ApifyClient with 10 retries and 1s min delay."""
     return ApifyClient(
         token=token,
         max_retries=10,
@@ -284,7 +231,6 @@ def run_actor(
             f"{run.get('statusMessage', 'no message')}"
         )
 
-    # Stream the dataset items
     dataset_id = run["defaultDatasetId"]
     items = list(client.dataset(dataset_id).iterate_items())
 
@@ -298,9 +244,7 @@ def run_actor(
     return items, cost
 
 
-# ----------------------------------------------------------------------------
-# Stage 1 — Scrape comments
-# ----------------------------------------------------------------------------
+# --- Stage 1 - Scrape comments ---
 
 
 def scrape_comments(
@@ -344,7 +288,7 @@ def scrape_comments(
 
 def deduplicate_comments(comments: list[Comment]) -> list[Comment]:
     """
-    Keep one comment per username — the highest-engagement one.
+    Keep one comment per username - the highest-engagement one.
 
     Tie-breaking: higher `likes` wins; on a tie the longer `text` wins.
     This is purely client-side; the Apify Actor has no server-side dedup flag.
@@ -363,9 +307,7 @@ def deduplicate_comments(comments: list[Comment]) -> list[Comment]:
     return list(best.values())
 
 
-# ----------------------------------------------------------------------------
-# Stage 2 — Cohere ranking
-# ----------------------------------------------------------------------------
+# --- Stage 2 - Cohere ranking ---
 
 
 _RETRYABLE_COHERE_ERRORS = (
@@ -378,7 +320,7 @@ _RETRYABLE_COHERE_ERRORS = (
 
 def _build_prospect_schema() -> dict[str, Any]:
     """
-    JSON Schema for the Cohere `response_format` — guarantees well-formed
+    JSON Schema for the Cohere `response_format` - guarantees well-formed
     structured output with constrained decoding (no parsing retry loop
     needed in practice, but we still defensively handle malformed JSON).
     """
@@ -419,17 +361,17 @@ Context:
 - Target buyer: {target}
 
 Your task:
-From the JSON array of TikTok comments (each has: username, text, likes, replies), identify up to {shortlist_size} commenters who look like real prospects for cold outreach. Rank them by **buying intent** — how close each commenter is to needing and buying a product or service today.
+From the JSON array of TikTok comments (each has: username, text, likes, replies), identify up to {shortlist_size} commenters who look like real prospects for cold outreach. Rank them by **buying intent** - how close each commenter is to needing and buying a product or service today.
 
-STRICT RANKING RUBRIC — use these exact definitions:
+STRICT RANKING RUBRIC - use these exact definitions:
 
-- **high** — The commenter is clearly running a real business RIGHT NOW. Signals: they mention their own store/shop/service/product (e.g., "I have a TikTok shop", "my Shopify store", "my embroidery business", "I'm a realtor"), OR their username explicitly references a business or profession (e.g., "@something_realtor", "@shopname", "@agencyname", "*_biz"), OR they describe an active, specific business pain point they are trying to solve (e.g., "my shop isn't getting views", "shadow banned every post", "can't get PayPal"). These are the prospects you would email first.
+- **high** - The commenter is clearly running a real business RIGHT NOW. Signals: they mention their own store/shop/service/product (e.g., "I have a TikTok shop", "my Shopify store", "my embroidery business", "I'm a realtor"), OR their username explicitly references a business or profession (e.g., "@something_realtor", "@shopname", "@agencyname", "*_biz"), OR they describe an active, specific business pain point they are trying to solve (e.g., "my shop isn't getting views", "shadow banned every post", "can't get PayPal"). These are the prospects you would email first.
 
-- **medium** — The commenter has relevant signals but weaker ones. Signals: they describe trying or planning to start a business (not yet running), OR they ask a substantive how-to question about running/scaling a business, OR their username is business-adjacent but ambiguous. These are warm leads, not hot ones.
+- **medium** - The commenter has relevant signals but weaker ones. Signals: they describe trying or planning to start a business (not yet running), OR they ask a substantive how-to question about running/scaling a business, OR their username is business-adjacent but ambiguous. These are warm leads, not hot ones.
 
-- **low** — The commenter has only mild signals: general business curiosity, personal development talk, or weak engagement with the topic. These are cold leads worth a final pass but not immediate outreach.
+- **low** - The commenter has only mild signals: general business curiosity, personal development talk, or weak engagement with the topic. These are cold leads worth a final pass but not immediate outreach.
 
-DO NOT include these — skip them entirely:
+DO NOT include these - skip them entirely:
 - Generic reactions, fan messages, emoji-only comments, and off-topic noise.
 - Skeptics, complainers, and people attacking the creator or the topic.
 - Scam accounts (usernames pushing Telegram, WhatsApp, crypto, or "DM for money" in the comment).
@@ -439,12 +381,12 @@ DO NOT include these — skip them entirely:
 Tie-breaker between two similar comments: prefer the one with higher likes and more replies (stronger engagement = stronger signal).
 
 Return EXACTLY one JSON object with a single `prospects` field containing up to {shortlist_size} ranked objects. Each object has these fields:
-- username: the TikTok handle, WITHOUT the @ prefix. Must appear verbatim in the input array — do not invent usernames.
+- username: the TikTok handle, WITHOUT the @ prefix. Must appear verbatim in the input array - do not invent usernames.
 - comment_excerpt: a short verbatim quote (≤140 chars) from their actual comment
 - why_prospect: one sentence explaining the specific signal that made them a prospect
-- priority: "high", "medium", or "low" — use the rubric above strictly
+- priority: "high", "medium", or "low" - use the rubric above strictly
 
-Order the array by priority (all highs first, then mediums, then lows). Within a priority, order by strength of signal. Favor quality over quantity — it is better to return 8 strong prospects than {shortlist_size} weak ones."""
+Order the array by priority (all highs first, then mediums, then lows). Within a priority, order by strength of signal. Favor quality over quantity - it is better to return 8 strong prospects than {shortlist_size} weak ones."""
 
 
 def rank_prospects(
@@ -458,7 +400,6 @@ def rank_prospects(
     Send the deduped comments to Cohere Command A and return a ranked
     shortlist plus the input/output token counts for cost tracking.
     """
-    # Build the user message — compact JSON array of comment objects.
     comment_payload = [
         {
             "username": c.username,
@@ -469,7 +410,28 @@ def rank_prospects(
         for c in comments
     ]
 
-    system_prompt = _build_system_prompt(topic, target, shortlist_size)
+    # Auto-detect from comments if set to "auto".
+    resolved_topic = topic.strip()
+    if not resolved_topic or resolved_topic.lower() == "auto":
+        sample_texts = " | ".join(c.text[:80] for c in comments[:15])
+        resolved_topic = (
+            "a TikTok video. Here is a sample of the comments to help "
+            "you understand the topic and audience: "
+            + sample_texts[:500]
+        )
+
+    resolved_target = target.strip()
+    if not resolved_target or resolved_target.lower() == "auto":
+        resolved_target = (
+            "anyone who appears to be running, starting, or actively "
+            "trying to grow a business - regardless of industry or "
+            "niche. Look for signals of real business activity (stores, "
+            "services, products, clients) rather than passive interest."
+        )
+
+    system_prompt = _build_system_prompt(
+        resolved_topic, resolved_target, shortlist_size
+    )
     user_message = (
         "Here is the full JSON array of comments. "
         "Return the ranked prospect shortlist now.\n\n"
@@ -535,7 +497,6 @@ def rank_prospects(
 
         return rankings, input_tokens, output_tokens
 
-    # Retry-with-backoff on transient errors
     last_error: Exception | None = None
     for attempt in range(5):
         try:
@@ -574,9 +535,7 @@ def estimate_cohere_cost(input_tokens: int, output_tokens: int) -> float:
     )
 
 
-# ----------------------------------------------------------------------------
-# Stage 3 — Enrich profiles
-# ----------------------------------------------------------------------------
+# --- Stage 3 - Enrich profiles ---
 
 
 def enrich_profiles(
@@ -587,7 +546,6 @@ def enrich_profiles(
     Run the TikTok Profile Scraper against the shortlisted usernames and
     return {lowercase_username: authorMeta_dict}.
     """
-    # Strip any leading @ just in case, dedupe, lowercase for keys.
     clean_usernames = sorted({u.lstrip("@").strip() for u in usernames if u})
     if not clean_usernames:
         return {}, 0.0
@@ -616,15 +574,13 @@ def enrich_profiles(
         name = (author.get("name") or "").strip().lower()
         if not name:
             continue
-        # One row per video — keep only the first row we see per username
+        # One row per video - keep only the first row we see per username
         profiles_by_username.setdefault(name, author)
 
     return profiles_by_username, cost
 
 
-# ----------------------------------------------------------------------------
-# Stage 4 — Join
-# ----------------------------------------------------------------------------
+# --- Stage 4 - Join ---
 
 
 def _coerce_bio_link(bio_link: Any) -> str:
@@ -681,9 +637,7 @@ def join_prospects(
     return prospects
 
 
-# ----------------------------------------------------------------------------
-# Stage 5 — Write output
-# ----------------------------------------------------------------------------
+# --- Stage 5 - Write output ---
 
 
 def write_prospects_csv(prospects: list[Prospect], path: Path) -> None:
@@ -734,9 +688,7 @@ def write_debug_json(data: Any, path: Path) -> None:
         json.dump(data, f, indent=2, ensure_ascii=False, default=str)
 
 
-# ----------------------------------------------------------------------------
-# Summary printer
-# ----------------------------------------------------------------------------
+# --- Summary printer ---
 
 
 def print_summary(
@@ -750,7 +702,7 @@ def print_summary(
     sub = "─" * 72
     print()
     print(header)
-    print("  TIKTOK PROSPECT PIPELINE — RESULTS")
+    print("  TIKTOK PROSPECT PIPELINE - RESULTS")
     print(header)
     print(f"  Source video : {video_url}")
     print(f"  Prospects    : {len(prospects)}")
@@ -758,7 +710,6 @@ def print_summary(
     print(f"  Total runtime: {total_elapsed_sec:.1f}s")
     print(sub)
 
-    # Top 3 prospects — the crown jewels
     top = [p for p in prospects if p.priority == "high"][:3]
     if top:
         print("  TOP 3 HIGH-PRIORITY PROSPECTS")
@@ -769,7 +720,7 @@ def print_summary(
             bio_link_label = p.bio_link or "(no bio link)"
             print(
                 f"  {i}. @{p.username}  "
-                f"— {p.followers:,} followers{seller_badge}{verified_badge}"
+                f"- {p.followers:,} followers{seller_badge}{verified_badge}"
             )
             print(f"     bio link    : {bio_link_label}")
             print(
@@ -806,15 +757,13 @@ def _truncate(s: str, limit: int) -> str:
     return s[: limit - 1] + "…"
 
 
-# ----------------------------------------------------------------------------
-# Entry point
-# ----------------------------------------------------------------------------
+# --- Entry point ---
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "TikTok prospect pipeline — scrape comments, filter with Cohere, "
+            "TikTok prospect pipeline - scrape comments, filter with Cohere, "
             "enrich with Profile Scraper, and write a unified prospects.csv."
         ),
     )
@@ -945,7 +894,7 @@ def main(argv: list[str] | None = None) -> int:
         )
 
         if not rankings:
-            log.error("Cohere returned zero prospects — nothing to enrich")
+            log.error("Cohere returned zero prospects - nothing to enrich")
             return 1
 
         # ----- Stage 3: enrich profiles ---------------------------------
@@ -975,7 +924,7 @@ def main(argv: list[str] | None = None) -> int:
     except KeyboardInterrupt:
         log.warning("Interrupted by user")
         return 130
-    except Exception as e:  # noqa: BLE001 — top-level catch for CLI UX
+    except Exception as e:  # noqa: BLE001 - top-level catch for CLI UX
         log.exception("Pipeline failed: %s", e)
         return 1
 
