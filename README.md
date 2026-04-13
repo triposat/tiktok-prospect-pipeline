@@ -266,7 +266,7 @@ Wrap the script in a cron job, GitHub Actions workflow, or Apify Schedule:
 | `Cohere ranking failed after 5 attempts` | Trial key rate limit (20 RPM / 1,000 calls/month) | Wait a minute, or upgrade to a paid Cohere key |
 | `No comments returned` | Video has no comments / URL malformed | Verify the video URL in a browser first |
 | Most prospects have `followers=0` | `authorMeta.fans` missing - account may be private | Check `is_private=True` rows and filter them out |
-| LLM returns fewer than `shortlist-size` prospects | Pool was genuinely small (a lot of noise) | Use a smaller shortlist size or try a different video with more business-oriented commenters |
+| LLM returns fewer than `shortlist-size` prospects | Pool was too small or too noisy | Use a smaller shortlist size or try a different video with more business-oriented commenters |
 
 ---
 
@@ -284,7 +284,7 @@ Profile Scraper    $0.0600    15 profiles × $4.00 / 1,000
 Total              $0.7622    per complete run
 ```
 
-The Apify free tier ($5/month) covers about 7 full runs before billing kicks in. The Cohere free tier (1,000 calls/month) covers 1,000 runs - the Apify side is the constraint, not Cohere.
+The Apify free tier ($5/month) covers about 7 full runs before billing starts. The Cohere free tier (1,000 calls/month) covers 1,000 runs - the Apify side is the constraint, not Cohere.
 
 ---
 
