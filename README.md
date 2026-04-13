@@ -1,6 +1,6 @@
 # TikTok Prospect Pipeline
 
-End-to-end Python automation of the TikTok lead-generation workflow: scrape comments, filter with an LLM, enrich with profile data, and export a unified prospect list - all in one command.
+End-to-end Python automation of the TikTok lead-generation workflow: scrape comments, filter with an LLM, enrich with profile data, and export a unified prospect list.
 
 ```
 ┌─────────────────┐   ┌────────────────┐   ┌─────────────────┐   ┌──────────────┐
@@ -21,8 +21,8 @@ End-to-end Python automation of the TikTok lead-generation workflow: scrape comm
 ## Requirements
 
 - **Python 3.10+**
-- An **Apify account** - free, $5/month in platform credits (more than enough for this workflow).
-- A **Cohere API key** - their free trial tier gives you 1,000 API calls/month without a credit card.
+- An **Apify account** - free tier gives $5/month in platform credits.
+- A **Cohere API key** - free trial tier, 1,000 API calls/month.
 
 ---
 
@@ -53,7 +53,7 @@ Only three packages are installed:
 | `cohere` | `>=6.1.0,<7.0.0` | Calls Cohere Command A for prospect ranking |
 | `python-dotenv` | `>=1.0.0,<2.0.0` | Loads API keys from `.env` |
 
-No pandas, no heavyweight frameworks. Python's built-in `csv` and `json` modules cover everything else.
+Built-in `csv` and `json` modules cover everything else.
 
 ### 3. Configure your API keys
 
@@ -69,7 +69,7 @@ CO_API_KEY=your_cohere_key_here
 ```
 
 - **Apify token:** https://console.apify.com/account/integrations
-- **Cohere key:** https://dashboard.cohere.com/api-keys - create a trial key (no credit card required)
+- **Cohere key:** https://dashboard.cohere.com/api-keys - create a trial key
 
 The `.env` file is gitignored. Never commit real secrets.
 
@@ -129,7 +129,7 @@ python pipeline.py \
 
 ### What you see in the terminal
 
-The pipeline prints live progress during each stage (scrape → rank → enrich → join → write) and ends with a human-readable summary. Example output from a real run (profiles shown are publicly available TikTok data, used for demonstration):
+The pipeline prints live progress during each stage (scrape → rank → enrich → join → write) and ends with a summary. Example output from a real run (profiles shown are publicly available TikTok data, used for demonstration):
 
 ```
 ═══════════════════════════════════════════════════════════════════
@@ -266,7 +266,7 @@ Wrap the script in a cron job, GitHub Actions workflow, or Apify Schedule:
 | `Cohere ranking failed after 5 attempts` | Trial key rate limit (20 RPM / 1,000 calls/month) | Wait a minute, or upgrade to a paid Cohere key |
 | `No comments returned` | Video has no comments / URL malformed | Verify the video URL in a browser first |
 | Most prospects have `followers=0` | `authorMeta.fans` missing - account may be private | Check `is_private=True` rows and filter them out |
-| LLM returns fewer than `shortlist-size` prospects | Pool was genuinely small (a lot of noise) | Lower the threshold - any real prospect is still valuable |
+| LLM returns fewer than `shortlist-size` prospects | Pool was genuinely small (a lot of noise) | Use a smaller shortlist size or try a different video with more business-oriented commenters |
 
 ---
 
@@ -299,4 +299,4 @@ The Apify free tier ($5/month) covers about 7 full runs before billing kicks in.
 
 ## License
 
-MIT. Fork it, adapt it, use it however you want.
+MIT.
