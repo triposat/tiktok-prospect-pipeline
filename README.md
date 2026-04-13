@@ -53,7 +53,7 @@ Only three packages are installed:
 | `cohere` | `>=6.1.0,<7.0.0` | Calls Cohere Command A for prospect ranking |
 | `python-dotenv` | `>=1.0.0,<2.0.0` | Loads API keys from `.env` |
 
-No pandas, no heavyweight frameworks. Python's built-in `csv` and `json` modules handle the rest.
+No pandas, no heavyweight frameworks. Python's built-in `csv` and `json` modules cover everything else.
 
 ### 3. Configure your API keys
 
@@ -77,7 +77,7 @@ The `.env` file is gitignored. Never commit real secrets.
 
 ## Usage
 
-The simplest run - point it at a TikTok video URL and let it go:
+The simplest run:
 
 ```bash
 python pipeline.py --video-url "https://www.tiktok.com/@garyvee/video/7626061508174236941"
@@ -183,7 +183,7 @@ Uses `apify_client.ApifyClient.actor(...).call()` which blocks until the run fin
 
 ### Stage 2 - Deduplicate (`deduplicate_comments`)
 
-The same username can comment multiple times on a video. The script keeps one row per user - the one with the highest `diggCount` (likes). Ties break on longer comment text. All client-side; the Actor has no server-side dedup flag.
+The same username can comment multiple times on a video. The script keeps one row per user - the one with the highest `diggCount` (likes). If tied, the longer comment wins. All client-side; the Actor has no server-side dedup flag.
 
 ### Stage 3 - Rank with Cohere (`rank_prospects`)
 
