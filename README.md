@@ -190,7 +190,7 @@ The same username can comment multiple times on a video. The script keeps one ro
 Sends the deduped comments as a JSON array to **Cohere Command A** (`command-a-03-2025`) with:
 
 - A system prompt describing the topic, target buyer, and ranking criteria.
-- A `response_format` with a strict JSON schema - Cohere's constrained decoding guarantees the output is valid JSON matching the schema every time.
+- A `response_format` with a strict JSON schema - Cohere's constrained decoding enforces schema compliance server-side, so the output matches the expected JSON structure without retry loops.
 - Temperature `0.1` for consistent rankings.
 
 Exponential backoff on transient errors (`TooManyRequestsError`, `ServiceUnavailableError`, `GatewayTimeoutError`, `InternalServerError`).
@@ -284,7 +284,7 @@ Profile Scraper    $0.0600    15 profiles × $4.00 / 1,000
 Total              $0.7622    per complete run
 ```
 
-The Apify free tier ($5/month) covers ~6 full runs before billing kicks in. The Cohere free tier (1,000 calls/month) covers 1,000 runs - the Apify side is the constraint, not Cohere.
+The Apify free tier ($5/month) covers about 7 full runs before billing kicks in. The Cohere free tier (1,000 calls/month) covers 1,000 runs - the Apify side is the constraint, not Cohere.
 
 ---
 
