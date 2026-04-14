@@ -7,20 +7,13 @@ Python script that scrapes TikTok comments, filters prospects with an LLM, enric
 │  TikTok video   │ → │ Comments       │ → │ Cohere          │ → │ Profile      │ → prospects.csv
 │  URL            │   │ Scraper (Apify)│   │ Command A       │   │ Scraper      │
 └─────────────────┘   └────────────────┘   └─────────────────┘   └──────────────┘
-                      508 comments          Top 15 ranked        15 enriched
-                      $0.635 cost           shortlist            profiles
-                                            ~$0.07 cost          $0.06 cost
 ```
-
----
 
 ## Requirements
 
 - **Python 3.10+**
-- An **Apify account** - free tier gives $5/month in platform credits.
-- A **Cohere API key** - free trial tier, 1,000 API calls/month.
-
----
+- An **[Apify account](https://console.apify.com/sign-in)** - free tier gives $5/month in platform credits.
+- A **[Cohere API key](https://dashboard.cohere.com/api-keys)** - free trial tier, 1,000 API calls/month.
 
 ## Setup
 
@@ -41,7 +34,7 @@ source .venv/bin/activate        # macOS/Linux
 pip install -r requirements.txt
 ```
 
-Only three packages are installed:
+Only 3 packages are installed:
 
 | Package | Version | Purpose |
 |---|---|---|
@@ -68,8 +61,6 @@ CO_API_KEY=your_cohere_key_here
 - **Cohere key:** https://dashboard.cohere.com/api-keys - create a trial key
 
 The `.env` file is gitignored. Never commit real secrets.
-
----
 
 ## Usage
 
@@ -159,8 +150,6 @@ The pipeline prints live progress during each stage (scrape → rank → enrich 
 ═══════════════════════════════════════════════════════════════════
 ```
 
----
-
 ## How it works
 
 ### Stage 1 - Scrape comments (`scrape_comments`)
@@ -214,8 +203,6 @@ Joins each ranked prospect to its original comment and profile data by lowercase
 
 Writes `prospects.csv` with stable column order. Prints the summary with the top 3 high-priority prospects and the full cost breakdown.
 
----
-
 ## Customization
 
 ### Use a different LLM
@@ -251,8 +238,6 @@ Wrap the script in a cron job, GitHub Actions workflow, or Apify Schedule:
 0 9 * * MON  cd /path/to/tiktok-prospect-pipeline && .venv/bin/python pipeline.py --video-url "https://..." >> run.log 2>&1
 ```
 
----
-
 ## Troubleshooting
 
 | Problem | Cause | Fix |
@@ -263,30 +248,3 @@ Wrap the script in a cron job, GitHub Actions workflow, or Apify Schedule:
 | `No comments returned` | Video has no comments / URL malformed | Verify the video URL in a browser first |
 | Most prospects have `followers=0` | `authorMeta.fans` missing - account may be private | Check `is_private=True` rows and filter them out |
 | LLM returns fewer than `shortlist-size` prospects | Pool was too small or too noisy | Use a smaller shortlist size or try a different video with more relevant commenters |
-
----
-
-## Costs in detail
-
-From a test run:
-
-```
-Stage              Cost       Notes
-─────────────────────────────────────────────────────────────────
-Comments Scraper   $0.6350    508 comments × $1.25 / 1,000
-Cohere Command A   $0.0672    ~22K input + ~1.2K output tokens
-Profile Scraper    $0.0600    15 profiles × $4.00 / 1,000
-─────────────────────────────────────────────────────────────────
-Total              $0.7622    per complete run
-```
-
-The Apify free tier ($5/month) covers about 7 full runs before billing starts. The Cohere free tier (1,000 calls/month) covers 1,000 runs - the Apify side is the constraint, not Cohere.
-
----
-
-## What this script does NOT do
-
-- **It does not extract email addresses.** Use the Apify [Mass TikTok Email Scraper](https://apify.com/scraper-mind/tiktok-email-scraper) for that (paid, $5/month rental).
-- **It does not send outreach.** It produces the prospect list; you write the message.
-- **It does not auto-qualify private accounts.** The `is_private=True` flag tells you which ones to skip.
-- **It is not a legal review.** Scraping TikTok data has compliance implications (TikTok ToS, CAN-SPAM, GDPR). Read the "Legal and compliance considerations" section of the blog post before any outreach.
