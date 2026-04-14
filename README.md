@@ -12,10 +12,6 @@ Python script that scrapes TikTok comments, filters prospects with an LLM, enric
                                             ~$0.07 cost          $0.06 cost
 ```
 
-**Total cost per run:** ~$0.77 on a 500-comment video.
-**Total runtime:** ~4 minutes.
-**Codebase:** one file, ~1,000 lines, three dependencies.
-
 ---
 
 ## Requirements
