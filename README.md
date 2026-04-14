@@ -1,6 +1,6 @@
 # TikTok Prospect Pipeline
 
-End-to-end Python automation of the TikTok lead-generation workflow: scrape comments, filter with an LLM, enrich with profile data, and export a unified prospect list.
+Python script that scrapes TikTok comments, filters prospects with an LLM, enriches with profile data, and exports a prospect list.
 
 ```
 ┌─────────────────┐   ┌────────────────┐   ┌─────────────────┐   ┌──────────────┐
@@ -14,7 +14,7 @@ End-to-end Python automation of the TikTok lead-generation workflow: scrape comm
 
 **Total cost per run:** ~$0.77 on a 500-comment video.
 **Total runtime:** ~4 minutes.
-**Code surface:** one file, ~1,000 lines, three dependencies.
+**Codebase:** one file, ~1,000 lines, three dependencies.
 
 ---
 
@@ -53,7 +53,7 @@ Only three packages are installed:
 | `cohere` | `>=6.1.0,<7.0.0` | Calls Cohere Command A for prospect ranking |
 | `python-dotenv` | `>=1.0.0,<2.0.0` | Loads API keys from `.env` |
 
-Built-in `csv` and `json` modules cover everything else.
+Built-in `csv` and `json` handle the rest.
 
 ### 3. Configure your API keys
 
@@ -99,8 +99,8 @@ python pipeline.py \
 | Flag | Default | What it does |
 |---|---|---|
 | `--video-url` | *(required)* | The TikTok video to scrape comments from |
-| `--topic` | `auto` (inferred from comments) | Passed to the LLM so it knows what the video is about. Set to `auto` to let the pipeline detect the niche from the first 15 comments. |
-| `--target` | `auto` (inferred from comments) | Describes your ideal prospect, passed to the LLM. Set to `auto` and the pipeline uses a universal "anyone running a business" rubric. |
+| `--topic` | `auto` (inferred from comments) | Video topic for the LLM prompt. `auto` detects it from the first 15 comments. |
+| `--target` | `auto` (inferred from comments) | Your ideal prospect, passed to the LLM. `auto` defaults to "anyone running a business." |
 | `--shortlist-size` | 15 | Maximum prospects the LLM should return |
 | `--comments-limit` | 1000 | Max comments to scrape from the video |
 | `--output-dir` | `./output` | Directory for `prospects.csv` and debug files |
@@ -108,7 +108,7 @@ python pipeline.py \
 
 ### Output
 
-`./output/prospects.csv` - one row per enriched prospect, with these columns:
+`./output/prospects.csv` - one row per prospect, with these columns:
 
 | Column | Description |
 |---|---|
@@ -179,25 +179,25 @@ Calls the `clockworks/tiktok-comments-scraper` Actor with:
 }
 ```
 
-Uses `apify_client.ApifyClient.actor(...).call()` which blocks until the run finishes. Typically takes 1-3 minutes for 500 comments. Results are loaded via `iterate_items()` into a list - fine for the typical volume (under 1,000 comments).
+Uses `client.actor(...).call()` which blocks until the run finishes. Typically takes 1-3 minutes for 500 comments. Results are loaded via `iterate_items()` into a list.
 
 ### Stage 2 - Deduplicate (`deduplicate_comments`)
 
-The same username can comment multiple times on a video. The script keeps one row per user - the one with the highest `diggCount` (likes). If tied, the longer comment wins. All client-side; the Actor has no server-side dedup flag.
+The same username can comment multiple times on a video. The script keeps one row per user - the one with the highest `diggCount` (likes). If tied, the longer comment wins.
 
 ### Stage 3 - Rank with Cohere (`rank_prospects`)
 
 Sends the deduped comments as a JSON array to **Cohere Command A** (`command-a-03-2025`) with:
 
 - A system prompt describing the topic, target buyer, and ranking criteria.
-- A `response_format` with a strict JSON schema - Cohere's constrained decoding enforces schema compliance server-side, so the output matches the expected JSON structure without retry loops.
+- A `response_format` with a strict JSON schema - Cohere's constrained decoding enforces schema compliance server-side.
 - Temperature `0.1` for consistent rankings.
 
 Exponential backoff on transient errors (`TooManyRequestsError`, `ServiceUnavailableError`, `GatewayTimeoutError`, `InternalServerError`).
 
 ### Stage 4 - Enrich profiles (`enrich_profiles`)
 
-Takes the shortlisted usernames the LLM returned and calls `clockworks/tiktok-profile-scraper`:
+Takes the shortlisted usernames and calls `clockworks/tiktok-profile-scraper`:
 
 ```python
 {
@@ -208,11 +208,11 @@ Takes the shortlisted usernames the LLM returned and calls `clockworks/tiktok-pr
 }
 ```
 
-Returns full profile metadata (`authorMeta.{name,fans,signature,bioLink,verified,ttSeller,privateAccount,profileUrl}`) for each user.
+Returns profile metadata (`authorMeta.{name,fans,signature,bioLink,verified,ttSeller,privateAccount,profileUrl}`) for each user.
 
 ### Stage 5 - Join (`join_prospects`)
 
-Matches each ranked prospect back to its original comment and its enriched profile, using lowercase username as the join key. Produces one `Prospect` dataclass per row.
+Joins each ranked prospect to its original comment and profile data by lowercase username. One row per prospect.
 
 ### Stage 6 - Write output
 
@@ -237,7 +237,7 @@ def rank_prospects(
     ...
 ```
 
-Return `(rankings, input_tokens, output_tokens)`. Any modern LLM with structured JSON output works - OpenAI's `response_format`, Anthropic's `response_format` or tool use, Google's Gemini structured outputs. The rest of the pipeline is LLM-agnostic.
+Return `(rankings, input_tokens, output_tokens)`. Any modern LLM with structured JSON output works - OpenAI's `response_format`, Anthropic's `response_format` or tool use, Google's Gemini structured outputs. The rest of the pipeline doesn't care which LLM you use.
 
 ### Change the prompt
 
@@ -266,13 +266,13 @@ Wrap the script in a cron job, GitHub Actions workflow, or Apify Schedule:
 | `Cohere ranking failed after 5 attempts` | Trial key rate limit (20 RPM / 1,000 calls/month) | Wait a minute, or upgrade to a paid Cohere key |
 | `No comments returned` | Video has no comments / URL malformed | Verify the video URL in a browser first |
 | Most prospects have `followers=0` | `authorMeta.fans` missing - account may be private | Check `is_private=True` rows and filter them out |
-| LLM returns fewer than `shortlist-size` prospects | Pool was too small or too noisy | Use a smaller shortlist size or try a different video with more business-oriented commenters |
+| LLM returns fewer than `shortlist-size` prospects | Pool was too small or too noisy | Use a smaller shortlist size or try a different video with more relevant commenters |
 
 ---
 
 ## Costs in detail
 
-Real numbers from a typical run:
+From a test run:
 
 ```
 Stage              Cost       Notes
@@ -293,7 +293,7 @@ The Apify free tier ($5/month) covers about 7 full runs before billing starts. T
 - **It does not extract email addresses.** Use the Apify [Mass TikTok Email Scraper](https://apify.com/scraper-mind/tiktok-email-scraper) for that (paid, $5/month rental).
 - **It does not send outreach.** It produces the prospect list; you write the message.
 - **It does not auto-qualify private accounts.** The `is_private=True` flag tells you which ones to skip.
-- **It is not a legal review.** Scraping TikTok data has real compliance implications (TikTok ToS, CAN-SPAM, GDPR). Read the "Legal and compliance considerations" section of the blog post before any outreach.
+- **It is not a legal review.** Scraping TikTok data has compliance implications (TikTok ToS, CAN-SPAM, GDPR). Read the "Legal and compliance considerations" section of the blog post before any outreach.
 
 ---
 

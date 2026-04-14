@@ -74,7 +74,7 @@ log = logging.getLogger("pipeline")
 
 @dataclass
 class Comment:
-    """Normalized from the raw Apify response. See scrape_comments() for mapping."""
+    """Single scraped comment."""
 
     username: str
     text: str
@@ -116,7 +116,7 @@ class Prospect:
 
 @dataclass
 class CostReport:
-    """Cumulative cost tracking for a single pipeline run."""
+    """Cost breakdown for one run."""
 
     comments_scraper_usd: float = 0.0
     profile_scraper_usd: float = 0.0
@@ -137,7 +137,7 @@ class CostReport:
 
 
 class Spinner:
-    """Minimal live-progress spinner for long-running steps."""
+    """CLI progress spinner."""
 
     FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 
@@ -204,7 +204,7 @@ def run_actor(
             run = client.actor(actor_name).call(
                 run_input=run_input,
                 timeout_secs=timeout_secs,
-                wait_secs=None,  # wait as long as the Actor needs
+                wait_secs=None,  # block until done
             )
     except ApifyApiError as e:
         log.error(
@@ -252,7 +252,7 @@ def scrape_comments(
     video_url: str,
     comments_limit: int,
 ) -> tuple[list[Comment], float]:
-    """Call the TikTok Comments Scraper and normalize the results."""
+    """Scrape comments from a TikTok video."""
     run_input = {
         "postURLs": [video_url],
         "commentsPerPost": comments_limit,
@@ -291,7 +291,6 @@ def deduplicate_comments(comments: list[Comment]) -> list[Comment]:
     Keep one comment per username - the highest-engagement one.
 
     Tie-breaking: higher `likes` wins; on a tie the longer `text` wins.
-    This is purely client-side; the Apify Actor has no server-side dedup flag.
     """
     best: dict[str, Comment] = {}
     for c in comments:
@@ -319,11 +318,7 @@ _RETRYABLE_COHERE_ERRORS = (
 
 
 def _build_prospect_schema() -> dict[str, Any]:
-    """
-    JSON Schema for the Cohere `response_format` - guarantees well-formed
-    structured output with constrained decoding (no parsing retry loop
-    needed in practice, but we still defensively handle malformed JSON).
-    """
+    """JSON Schema for the Cohere `response_format` (constrained decoding)."""
     return {
         "type": "object",
         "properties": {
@@ -396,10 +391,7 @@ def rank_prospects(
     target: str,
     shortlist_size: int,
 ) -> tuple[list[LLMRanking], int, int]:
-    """
-    Send the deduped comments to Cohere Command A and return a ranked
-    shortlist plus the input/output token counts for cost tracking.
-    """
+    """Rank comments with Cohere. Returns (rankings, input_tokens, output_tokens)."""
     comment_payload = [
         {
             "username": c.username,
@@ -415,26 +407,21 @@ def rank_prospects(
     if not resolved_topic or resolved_topic.lower() == "auto":
         sample_texts = " | ".join(c.text[:80] for c in comments[:15])
         resolved_topic = (
-            "a TikTok video. Here is a sample of the comments to help "
-            "you understand the topic and audience: "
+            "a TikTok video — sample comments for context: "
             + sample_texts[:500]
         )
 
     resolved_target = target.strip()
     if not resolved_target or resolved_target.lower() == "auto":
         resolved_target = (
-            "anyone who appears to be running, starting, or actively "
-            "trying to grow a business - regardless of industry or "
-            "niche. Look for signals of real business activity (stores, "
-            "services, products, clients) rather than passive interest."
+            "anyone running or starting a business"
         )
 
     system_prompt = _build_system_prompt(
         resolved_topic, resolved_target, shortlist_size
     )
     user_message = (
-        "Here is the full JSON array of comments. "
-        "Return the ranked prospect shortlist now.\n\n"
+        "Comments:\n\n"
         + json.dumps(comment_payload, ensure_ascii=False)
     )
     schema = _build_prospect_schema()
@@ -453,8 +440,7 @@ def rank_prospects(
 
         if response.finish_reason not in ("COMPLETE", "STOP_SEQUENCE"):
             raise RuntimeError(
-                f"Cohere call did not complete cleanly: "
-                f"finish_reason={response.finish_reason}"
+                f"Unexpected finish_reason: {response.finish_reason}"
             )
 
         # response.message.content is a list of content blocks; keep only
@@ -514,7 +500,7 @@ def rank_prospects(
             )
             time.sleep(sleep)
         except json.JSONDecodeError as e:
-            # Schema mode should prevent this, but guard as a safety net.
+            # Schema mode should prevent this.
             last_error = e
             log.warning(
                 "Cohere returned malformed JSON; retrying (attempt %d/5)",
@@ -542,10 +528,7 @@ def enrich_profiles(
     client: ApifyClient,
     usernames: list[str],
 ) -> tuple[dict[str, dict], float]:
-    """
-    Run the TikTok Profile Scraper against the shortlisted usernames and
-    return {lowercase_username: authorMeta_dict}.
-    """
+    """Scrape profiles. Returns {lowercase_username: authorMeta_dict}."""
     clean_usernames = sorted({u.lstrip("@").strip() for u in usernames if u})
     if not clean_usernames:
         return {}, 0.0
@@ -597,10 +580,7 @@ def join_prospects(
     comments_by_username: dict[str, Comment],
     profiles_by_username: dict[str, dict],
 ) -> list[Prospect]:
-    """
-    Combine the LLM ranking, the original comment, and the enriched profile
-    into one unified Prospect per row. Ranking order is preserved.
-    """
+    """Join ranking + comment + profile into one Prospect per row."""
     priority_rank = {"high": 0, "medium": 1, "low": 2}
     rankings_sorted = sorted(
         rankings, key=lambda r: priority_rank.get(r.priority, 99)
