@@ -294,9 +294,3 @@ The Apify free tier ($5/month) covers about 7 full runs before billing starts. T
 - **It does not send outreach.** It produces the prospect list; you write the message.
 - **It does not auto-qualify private accounts.** The `is_private=True` flag tells you which ones to skip.
 - **It is not a legal review.** Scraping TikTok data has compliance implications (TikTok ToS, CAN-SPAM, GDPR). Read the "Legal and compliance considerations" section of the blog post before any outreach.
-
----
-
-## License
-
-MIT.
